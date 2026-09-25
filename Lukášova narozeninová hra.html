@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#14293a">
+  <title>Lukášova narozeninová hra</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #f7f4e9; background: #102536; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100svh; overflow-x: hidden; }
+    button { font: inherit; }
+    .app { min-height: 100svh; display: grid; place-items: center; padding: 18px; background: radial-gradient(circle at 50% 20%, #31556a, #102536 74%); }
+    .game-shell { width: min(100%, 1460px); overflow: hidden; border-radius: 24px; background: #d7c6a6; box-shadow: 0 28px 70px #071621aa, 0 0 0 1px #ffffff24; position: relative; }
+    .hud { position: absolute; z-index: 4; left: 0; right: 0; top: 0; padding: 18px 22px; display: flex; align-items: start; justify-content: space-between; gap: 12px; pointer-events: none; }
+    .hud > * { pointer-events: auto; }
+    .brand, .score { background: #132e3de8; border: 1px solid #ffffff30; border-radius: 17px; box-shadow: 0 8px 24px #0b21304d; }
+    .brand { padding: 10px 15px; font-weight: 900; letter-spacing: .03em; font-size: clamp(14px, 1.6vw, 22px); }
+    .brand span { color: #ffcb6d; }
+    .score { padding: 9px 15px; min-width: 165px; text-align: center; }
+    .score strong { display: block; font-size: clamp(16px, 1.8vw, 24px); line-height: 1.1; }
+    .score small { display: block; font-size: 12px; color: #d5e3e7; margin-top: 2px; }
+    .scene { display: block; width: 100%; height: auto; min-height: 500px; touch-action: manipulation; }
+    .bike { cursor: pointer; outline: none; transform-box: fill-box; transform-origin: 50% 65%; transition: transform .55s cubic-bezier(.2,1.4,.35,1), filter .35s; }
+    .bike:hover:not(.fallen), .bike:focus-visible:not(.fallen) { filter: drop-shadow(0 0 9px #ffef87); transform: translateY(-5px); }
+    .bike.fallen { transform: translate(14px, 24px) rotate(72deg) scale(.91); filter: drop-shadow(4px 6px 3px #18333c70); }
+    .bike.removed { pointer-events: none; animation: flyAway .72s ease-in forwards; }
+    @keyframes flyAway { from { transform: translate(14px, 24px) rotate(72deg) scale(.91); opacity: 1; } to { transform: translate(270px, -310px) rotate(700deg) scale(.08); opacity: 0; } }
+    .bike .hit { fill: transparent; }
+    .bike .kickstand { transition: opacity .3s; }
+    .bike.fallen .kickstand { opacity: 0; }
+    .spark { pointer-events: none; animation: spark .6s ease-out forwards; }
+    @keyframes spark { to { opacity: 0; transform: translateY(-25px) scale(1.7); } }
+    .ground-shadow { opacity: .34; transition: opacity .4s; }
+    .ground-shadow.fallen { opacity: .5; }
+    .ground-shadow.removed { opacity: 0; }
+    .game-tip { position: absolute; z-index: 3; left: 50%; bottom: 16px; transform: translateX(-50%); white-space: nowrap; text-align: center; background: #142d3bdc; border: 1px solid #fff4; border-radius: 99px; padding: 9px 17px; font-size: clamp(11px, 1.2vw, 15px); box-shadow: 0 7px 20px #162f4260; }
+    .overlay { position: absolute; inset: 0; z-index: 10; display: grid; place-items: center; background: linear-gradient(180deg, #071725d9, #0b2335cf 55%, #061420dc); text-align: center; padding: 24px; }
+    .overlay[hidden] { display: none; }
+    #fireworks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .card { position: relative; z-index: 1; width: min(100%, 620px); border-radius: 28px; padding: clamp(27px, 5vw, 52px); background: #0c2835e8; border: 1px solid #ffffff48; box-shadow: 0 26px 80px #061724b0, inset 0 1px #ffffff35; backdrop-filter: blur(8px); }
+    .eyebrow { color: #ffcc79; text-transform: uppercase; letter-spacing: .23em; font-size: 12px; font-weight: 800; margin: 0 0 12px; }
+    h1 { font-size: clamp(38px, 5vw, 70px); line-height: 1.02; margin: 0 0 18px; letter-spacing: -.05em; text-wrap: balance; text-shadow: 0 4px 0 #081d2e; }
+    h1 em { color: #ffce6b; font-style: normal; }
+    .card p:not(.eyebrow) { color: #d6e4e9; font-size: clamp(16px, 1.7vw, 20px); line-height: 1.55; margin: 0 auto 27px; max-width: 450px; }
+    .primary { border: 0; color: #342414; font-size: 19px; font-weight: 900; padding: 15px 31px; min-width: 185px; border-radius: 14px; background: linear-gradient(#ffe29c, #ffb84e); box-shadow: 0 5px 0 #b76824, 0 12px 30px #0007; cursor: pointer; transition: transform .15s, box-shadow .15s; }
+    .primary:hover { transform: translateY(-3px); box-shadow: 0 8px 0 #b76824, 0 16px 35px #0008; }
+    .primary:active { transform: translateY(4px); box-shadow: 0 1px 0 #b76824; }
+    .primary:focus-visible, .bike:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+    .hint { display: block; color: #a9c2cb; font-size: 12px; margin-top: 20px; }
+    .confetti-icon { font-size: 48px; display: block; margin-bottom: 12px; }
+    @media (max-width: 700px) {
+      .app { padding: 0; align-items: stretch; }
+      .game-shell { border-radius: 0; min-height: 100svh; overflow-x: auto; }
+      .scene { width: max(100%, 850px); max-width: none; min-height: 0; }
+      .hud { padding: 10px; }
+      .brand { max-width: 45%; }
+      .score { min-width: 130px; }
+      .game-tip { bottom: 14px; white-space: normal; width: min(90%, 360px); }
+      .overlay { position: fixed; }
+    }
+    @media (pointer: fine) {
+      .bike { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cpath d='M18 38V13c0-5 7-5 7 0v15l5-9c3-4 8 0 5 4l-4 10 9-7c4-3 8 3 4 6l-8 7 8-2c5-1 7 5 2 7L32 53c-9 3-18-3-20-11l-3-11c-1-5 5-7 7-2z' fill='%23ffcc8d' stroke='%2322333d' stroke-width='3' stroke-linejoin='round'/%3E%3Cpath d='m41 13 4-5m4 13 6-2m-10 11 7 3' stroke='%23ffd369' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E") 17 13, pointer; }
+    }
+  </style>
+</head>
+<body>
+<main class="app">
+  <div class="game-shell" id="gameShell">
+    <div class="hud" aria-live="polite">
+      <div class="brand">🏍️ Lukášova <span>narozeninová jízda</span></div>
+      <div class="score"><strong id="score">0 / 8</strong><small id="scoreCaption">motorek leží</small></div>
+    </div>
+    <svg class="scene" id="scene" viewBox="0 0 1200 720" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Náměstí s parkovištěm, osmi motorkami a osmi auty">
+      <defs>
+        <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#79bed0"/><stop offset="1" stop-color="#cfe5d4"/></linearGradient>
+        <linearGradient id="street" x2="0" y2="1"><stop stop-color="#546976"/><stop offset="1" stop-color="#364b58"/></linearGradient>
+        <pattern id="paving" width="72" height="36" patternUnits="userSpaceOnUse"><rect width="72" height="36" fill="#c4b798"/><path d="M0 0H72M0 18H72M36 0V18M0 18V36M72 18V36" stroke="#ac9d82" stroke-width="2" opacity=".65"/></pattern>
+        <pattern id="asphalt" width="80" height="80" patternUnits="userSpaceOnUse"><rect width="80" height="80" fill="#465b66"/><circle cx="12" cy="14" r="1" fill="#81919a"/><circle cx="48" cy="62" r="1.4" fill="#203f4d"/><circle cx="70" cy="22" r="1" fill="#89a0a4"/></pattern>
+        <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="5"/></filter>
+      </defs>
+      <rect width="1200" height="720" fill="url(#sky)"/>
+      <circle cx="958" cy="100" r="47" fill="#ffdf98" opacity=".8"/>
+      <path d="M0 225 Q160 190 295 213T600 214T900 194T1200 210V330H0Z" fill="#80a395" opacity=".7"/>
+      <!-- The old town square -->
+      <g id="buildings">
+        <rect x="0" y="142" width="218" height="200" fill="#dc9c83"/><path d="M0 142L108 86l110 56" fill="#a55552"/><path d="M0 142L108 86l110 56" fill="none" stroke="#89413f" stroke-width="8"/>
+        <rect x="24" y="174" width="42" height="64" rx="20" fill="#5c7d83" stroke="#f4d2ac" stroke-width="7"/><rect x="87" y="174" width="42" height="64" rx="20" fill="#5c7d83" stroke="#f4d2ac" stroke-width="7"/><rect x="150" y="174" width="42" height="64" rx="20" fill="#5c7d83" stroke="#f4d2ac" stroke-width="7"/>
+        <path d="M68 342v-73q0-29 30-29h20q30 0 30 29v73" fill="#785448" stroke="#f4c69f" stroke-width="8"/><circle cx="132" cy="302" r="4" fill="#f3d780"/>
+        <rect x="218" y="110" width="260" height="232" fill="#efc783"/><path d="M205 110l139-57 145 57" fill="#a16460" stroke="#805052" stroke-width="8"/><rect x="231" y="110" width="234" height="17" fill="#f6dca1"/>
+        <g fill="#638995" stroke="#fbebba" stroke-width="7"><rect x="255" y="158" width="52" height="72" rx="23"/><rect x="322" y="158" width="52" height="72" rx="23"/><rect x="389" y="158" width="52" height="72" rx="23"/></g>
+        <rect x="290" y="262" width="115" height="80" rx="42" fill="#568279" stroke="#fae2a9" stroke-width="7"/><text x="348" y="305" text-anchor="middle" font-size="23" font-weight="900" fill="#fff2c4"></text>
+        <rect x="478" y="155" width="290" height="187" fill="#a6bcad"/><path d="M470 154h307l-26-37H500Z" fill="#617f7b"/><rect x="510" y="190" width="54" height="76" rx="26" fill="#6c929a" stroke="#dde0be" stroke-width="7"/><rect x="586" y="190" width="54" height="76" rx="26" fill="#6c929a" stroke="#dde0be" stroke-width="7"/><rect x="662" y="190" width="54" height="76" rx="26" fill="#6c929a" stroke="#dde0be" stroke-width="7"/><path d="M569 342v-53q0-33 30-33h42q30 0 30 33v53" fill="#58716d" stroke="#dbe2c4" stroke-width="7"/>
+        <rect x="768" y="126" width="222" height="216" fill="#d99f83"/><path d="M754 128l125-56 124 56" fill="#9e6266" stroke="#7c5154" stroke-width="8"/><g fill="#59808c" stroke="#f4d6b5" stroke-width="7"><rect x="792" y="166" width="48" height="67" rx="22"/><rect x="856" y="166" width="48" height="67" rx="22"/><rect x="920" y="166" width="48" height="67" rx="22"/></g><rect x="795" y="266" width="166" height="76" fill="#66877d"/><path d="M795 266h166" stroke="#fae1a9" stroke-width="10"/><text x="878" y="310" text-anchor="middle" font-size="21" font-weight="900" fill="#ffefc2"></text>
+        <rect x="990" y="150" width="210" height="192" fill="#e6be91"/><path d="M984 152l113-62 117 62" fill="#9b6a69" stroke="#825557" stroke-width="8"/><g fill="#5d8390" stroke="#ffe3bc" stroke-width="7"><rect x="1017" y="187" width="48" height="61" rx="23"/><rect x="1080" y="187" width="48" height="61" rx="23"/><rect x="1143" y="187" width="48" height="61" rx="23"/></g><path d="M1056 342v-68h80v68" fill="#6d877f" stroke="#f4ddb5" stroke-width="7"/>
+        <path d="M0 341H1200" stroke="#71837c" stroke-width="8"/>
+      </g>
+      <path d="M0 342H1200V436H0Z" fill="url(#paving)"/>
+      <path d="M0 432H1200" stroke="#efe3c3" stroke-width="8"/>
+      <path d="M0 440H1200V720H0Z" fill="url(#asphalt)"/>
+      <path d="M0 484H1200" stroke="#a7b6ac" stroke-width="3" opacity=".4"/>
+      <path d="M0 558H1200M0 660H1200" stroke="#e7ddbd" stroke-width="4" opacity=".8"/>
+      <g id="parkingLines"></g>
+      <g opacity=".75"><path d="M13 365v78m1160-78v78" stroke="#334f53" stroke-width="7"/><path d="M0 365h48m1100 0h52" stroke="#334f53" stroke-width="7"/><circle cx="23" cy="365" r="13" fill="#ffdf9a"/><circle cx="1177" cy="365" r="13" fill="#ffdf9a"/></g>
+      <g id="bikeShadows"></g><g id="cars"></g><g id="bikes"></g><g id="effects"></g>
+      <g pointer-events="none"><rect x="28" y="395" width="186" height="36" rx="18" fill="#2d5a61" opacity=".9"/><text x="121" y="419" text-anchor="middle" font-size="18" font-weight="800" fill="#f9e8ba">HLINSKO</text></g>
+    </svg>
+    <div class="game-tip" id="tip">👆 Cvrnkni do motorek. Schodíš všechny dřív, než se některá postaví?</div>
+    <section class="overlay" id="intro" aria-labelledby="introTitle">
+      <canvas id="fireworks"></canvas>
+      <div class="card">
+        <p class="eyebrow">Malý narozeninový dárek</p>
+        <h1 id="introTitle">Všechno nejlepší <em>Lukáši!</em></h1>
+        <p>Mezi osmi auty stojí osm motorek. Schodíš je všechny do tří sekund, než se některá postaví? Potom každou ještě jednou odpinkni pryč!</p>
+        <button class="primary" id="startButton" type="button">Začít hru →</button>
+        <small class="hint">Myší, dotykem nebo klávesnicí</small>
+      </div>
+    </section>
+    <section class="overlay" id="win" aria-labelledby="winTitle" hidden>
+      <div class="card">
+        <span class="confetti-icon" aria-hidden="true">🎉🏍️🎉</span>
+        <p class="eyebrow">Vítězství!</p>
+        <h1 id="winTitle">Paráda, <em>Lukáši!</em></h1>
+        <p>Všechny motorky jsi schodil a odpinkl pryč. Přejeme ti skvělé narozeniny a spoustu dalších veselých zážitků!</p>
+        <button class="primary" id="againButton" type="button">Hrát znovu ↻</button>
+      </div>
+    </section>
+  </div>
+</main>
+<script>
+(() => {
+  'use strict';
+  const NS = 'http://www.w3.org/2000/svg';
+  const bikeLayer = document.getElementById('bikes');
+  const carLayer = document.getElementById('cars');
+  const shadowLayer = document.getElementById('bikeShadows');
+  const parkingLines = document.getElementById('parkingLines');
+  const effects = document.getElementById('effects');
+  const intro = document.getElementById('intro');
+  const win = document.getElementById('win');
+  const score = document.getElementById('score');
+  const caption = document.getElementById('scoreCaption');
+  const tip = document.getElementById('tip');
+  const gameTip = matchMedia('(max-width: 700px)').matches
+    ? '👆 Schodíš všech 8 motorek? Posouvej náměstí do stran.'
+    : '👆 Schodíš všech 8 motorek dřív, než se některá postaví?';
+  const bikeColors = ['#f5b34e', '#e77568', '#72c3bb', '#e7c76c', '#8ca4d6', '#f09272', '#83b69b', '#e3a6be'];
+  const carColors = ['#e6ba71', '#9bbfc7', '#bc8e85', '#b4bf91', '#a7a1c7', '#cf9aa8', '#b5c6aa', '#e6a683'];
+  const slots = Array.from({length: 20}, (_, index) => ({
+    x: 10 + (index % 10) * 118,
+    y: index < 10 ? 470 : 570
+  }));
+  let playing = false;
+  let won = false;
+  let phase = 'knock';
+  let audioContext;
+  let engineGain;
+  const recoveryMs = 3000;
+  const bikes = [];
+  const cars = [];
+
+  function svg(tag, attrs = {}) {
+    const el = document.createElementNS(NS, tag);
+    for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
+    return el;
+  }
+
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col <= 10; col++) {
+      const x = col * 118 + 3;
+      parkingLines.append(svg('path', {
+        d: `M${x} ${row ? 565 : 466}V${row ? 660 : 558}`,
+        stroke: '#e7ddbd', 'stroke-width': 3, opacity: .75
+      }));
+    }
+  }
+
+  function bikeMarkup(color) {
+    return `
+      <ellipse cx="65" cy="114" rx="68" ry="9" fill="#17313c" opacity=".3"/>
+      <path class="kickstand" d="M63 89l-9 23 16 0" stroke="#253945" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <circle cx="20" cy="87" r="23" fill="#202e36" stroke="#93a5a7" stroke-width="5"/><circle cx="20" cy="87" r="10" fill="#dae2d9"/><circle cx="20" cy="87" r="4" fill="#5c7179"/>
+      <circle cx="111" cy="87" r="23" fill="#202e36" stroke="#93a5a7" stroke-width="5"/><circle cx="111" cy="87" r="10" fill="#dae2d9"/><circle cx="111" cy="87" r="4" fill="#5c7179"/>
+      <path d="M20 87l26-31 29 29 35-40 1 42H75L46 56" fill="none" stroke="#263943" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M45 62q17-31 45-24l12 14-19 15H54Z" fill="${color}" stroke="#263943" stroke-width="4"/>
+      <path d="M47 51q20-12 43-7" fill="none" stroke="#ffffff" stroke-width="3" opacity=".55"/>
+      <path d="M43 55H21l-10-7h37" fill="#283d46"/><path d="M83 37h27l-5 12H89Z" fill="#233842"/>
+      <path d="M107 45l12-30h13" fill="none" stroke="#263943" stroke-width="6" stroke-linecap="round"/>
+      <path d="M119 15l-8-5m8 5 14-3" stroke="#263943" stroke-width="5" stroke-linecap="round"/>
+      <path d="M12 54h-8v17M118 51h16v22" fill="none" stroke="#e5e1cb" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="132" cy="16" r="6" fill="#fff1b6" stroke="#48535a" stroke-width="3"/>
+      <path d="M52 81h25l10 10H50Z" fill="#53646a" stroke="#233842" stroke-width="3"/>
+      <path d="M72 91l12 10h22" fill="none" stroke="#b9c2bd" stroke-width="5" stroke-linecap="round"/>
+      <path d="M98 63l21 2" stroke="#dce6da" stroke-width="4" stroke-linecap="round"/>
+      <rect class="hit" x="-8" y="0" width="150" height="122"/>`;
+  }
+
+  function carMarkup(color) {
+    return `
+      <ellipse cx="80" cy="94" rx="78" ry="8" fill="#182f39" opacity=".25"/>
+      <circle cx="37" cy="78" r="17" fill="#26343a" stroke="#aab9b7" stroke-width="5"/>
+      <circle cx="125" cy="78" r="17" fill="#26343a" stroke="#aab9b7" stroke-width="5"/>
+      <path d="M8 68V49q0-8 11-11l21-4 19-23h54l22 25 17 5q8 2 8 10v17q0 9-10 9H13q-5 0-5-9Z" fill="${color}" stroke="#263943" stroke-width="4"/>
+      <path d="M48 34 63 16h47l16 19Z" fill="#638997" stroke="#e9e7d5" stroke-width="3"/>
+      <path d="M84 17v19" stroke="#e9e7d5" stroke-width="3"/>
+      <path d="M13 52h136" stroke="#ffffff" stroke-width="3" opacity=".28"/>
+      <rect x="5" y="56" width="11" height="8" rx="2" fill="#fff0aa"/>
+      <rect x="148" y="54" width="12" height="9" rx="2" fill="#d65b4f"/>
+      <path d="M65 48h20" stroke="#edf0df" stroke-width="3" stroke-linecap="round"/>
+      <path d="M113 48h17" stroke="#edf0df" stroke-width="3" stroke-linecap="round"/>`;
+  }
+
+  for (let index = 0; index < 8; index++) {
+    const shadow = svg('ellipse', {rx: 45, ry: 7, fill: '#132a34', class: 'ground-shadow'});
+    shadowLayer.append(shadow);
+    const placement = svg('g');
+    const bike = svg('g', {class: 'bike', tabindex: '0', role: 'button', 'aria-label': `Schodit motorku ${index + 1}`, 'aria-pressed': 'false'});
+    bike.innerHTML = bikeMarkup(bikeColors[index % bikeColors.length]);
+    placement.append(bike);
+    bikeLayer.append(placement);
+    const state = {el: bike, placement, shadow, spec: null, timer: null, fallen: false, removed: false};
+    bikes.push(state);
+    bike.addEventListener('click', () => knock(state));
+    bike.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); knock(state); }
+    });
+  }
+
+  carColors.forEach(color => {
+    const placement = svg('g', {'aria-label': 'Zaparkované auto'});
+    placement.innerHTML = carMarkup(color);
+    carLayer.append(placement);
+    cars.push(placement);
+  });
+
+  function layoutVehicles() {
+    const shuffled = [...slots];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    bikes.forEach((state, index) => {
+      const slot = shuffled[index];
+      state.spec = {x: slot.x + 14, y: slot.y};
+      state.placement.setAttribute('transform', `translate(${state.spec.x} ${state.spec.y}) scale(.62)`);
+      state.shadow.setAttribute('cx', state.spec.x + 41);
+      state.shadow.setAttribute('cy', state.spec.y + 72);
+    });
+    cars.forEach((car, index) => {
+      const slot = shuffled[index + bikes.length];
+      car.setAttribute('transform', `translate(${slot.x + 8} ${slot.y + 11}) scale(.62)`);
+    });
+  }
+
+  layoutVehicles();
+
+  function ensureEngine() {
+    try {
+      const Audio = window.AudioContext || window.webkitAudioContext;
+      if (!Audio) return;
+      audioContext ||= new Audio();
+      audioContext.resume?.().catch(() => {});
+      if (engineGain) return;
+      const filter = audioContext.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 650;
+      engineGain = audioContext.createGain();
+      engineGain.gain.value = 0;
+      const engine = audioContext.createOscillator();
+      engine.type = 'sawtooth';
+      engine.frequency.value = 90;
+      const overtone = audioContext.createOscillator();
+      overtone.type = 'triangle';
+      overtone.frequency.value = 156;
+      const overtoneGain = audioContext.createGain();
+      overtoneGain.gain.value = .35;
+      const rev = audioContext.createOscillator();
+      rev.type = 'sine';
+      rev.frequency.value = .85;
+      const revDepth = audioContext.createGain();
+      revDepth.gain.value = 35;
+      rev.connect(revDepth);
+      revDepth.connect(engine.frequency);
+      engine.connect(filter);
+      overtone.connect(overtoneGain).connect(filter);
+      filter.connect(engineGain).connect(audioContext.destination);
+      engine.start(); overtone.start(); rev.start();
+    } catch (_) { /* Audio can be unavailable in some browsers. */ }
+  }
+
+  function updateEngine() {
+    if (!engineGain || !audioContext) return;
+    const upright = bikes.filter(b => !b.fallen && !b.removed).length;
+    const volume = playing && phase === 'knock' && !document.hidden && upright > 0 ? .045 + 0.29 + upright * .003 : 0;
+    engineGain.gain.setTargetAtTime(volume, audioContext.currentTime, .12);
+  }
+
+  function sound(frequency, duration, type = 'triangle') {
+    try {
+      ensureEngine();
+      if (!audioContext) return;
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(frequency, audioContext.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(frequency * .55, audioContext.currentTime + duration);
+      gain.gain.setValueAtTime(.085, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(.001, audioContext.currentTime + duration);
+      osc.connect(gain).connect(audioContext.destination);
+      osc.start(); osc.stop(audioContext.currentTime + duration);
+    } catch (_) { /* Sound is optional. */ }
+  }
+
+  function updateScore() {
+    if (phase === 'knock') {
+      const count = bikes.filter(b => b.fallen).length;
+      score.textContent = `${count} / ${bikes.length}`;
+      caption.textContent = 'motorek leží';
+      if (playing && count === bikes.length) {
+        phase = 'flick';
+        for (const state of bikes) clearTimeout(state.timer);
+        score.textContent = `0 / ${bikes.length}`;
+        caption.textContent = 'motorek odpinknuto';
+        tip.textContent = '👆 Teď klikni na každou ležící motorku znovu a odpinkni ji pryč!';
+      }
+    } else {
+      const count = bikes.filter(b => b.removed).length;
+      score.textContent = `${count} / ${bikes.length}`;
+      caption.textContent = 'motorek odpinknuto';
+      if (playing && count === bikes.length) victory();
+    }
+    updateEngine();
+  }
+
+  function stand(state) {
+    if (phase !== 'knock') return;
+    state.fallen = false;
+    state.timer = null;
+    state.el.classList.remove('fallen');
+    state.shadow.classList.remove('fallen');
+    state.el.setAttribute('aria-pressed', 'false');
+    state.el.setAttribute('aria-label', `Schodit motorku ${bikes.indexOf(state) + 1}`);
+    updateScore();
+  }
+
+  function spark(x, y) {
+    const group = svg('g', {class: 'spark', transform: `translate(${x} ${y})`});
+    group.innerHTML = '<path d="M0-16L5-5 17-4 8 3 11 15 0 8-11 15-8 3-17-4-5-5Z" fill="#ffe582" stroke="#fff6c5" stroke-width="2"/>';
+    effects.append(group);
+    setTimeout(() => group.remove(), 650);
+  }
+
+  function knock(state) {
+    if (!playing || won || state.removed) return;
+    if (phase === 'flick') {
+      if (state.fallen) fling(state);
+      return;
+    }
+    if (state.fallen) return;
+    state.fallen = true;
+    state.el.classList.add('fallen');
+    state.shadow.classList.add('fallen');
+    state.el.setAttribute('aria-pressed', 'true');
+    state.el.setAttribute('aria-label', `Motorka ${bikes.indexOf(state) + 1} leží`);
+    spark(state.spec.x + 49, state.spec.y + 24);
+    sound(420, .16);
+    state.timer = setTimeout(() => { if (playing && !won) stand(state); }, recoveryMs);
+    updateScore();
+  }
+
+  function fling(state) {
+    state.removed = true;
+    state.el.classList.add('removed');
+    state.shadow.classList.add('removed');
+    state.el.setAttribute('tabindex', '-1');
+    state.el.setAttribute('aria-label', `Motorka ${bikes.indexOf(state) + 1} je pryč`);
+    spark(state.spec.x + 49, state.spec.y + 24);
+    sound(750, .24);
+    updateScore();
+  }
+
+  function reset() {
+    for (const state of bikes) {
+      clearTimeout(state.timer);
+      state.fallen = false;
+      state.removed = false;
+      state.el.classList.remove('fallen', 'removed');
+      state.shadow.classList.remove('fallen', 'removed');
+      state.el.setAttribute('tabindex', '0');
+      state.el.setAttribute('aria-pressed', 'false');
+      state.el.setAttribute('aria-label', `Schodit motorku ${bikes.indexOf(state) + 1}`);
+    }
+    effects.replaceChildren();
+    layoutVehicles();
+    won = false;
+    playing = true;
+    phase = 'knock';
+    win.hidden = true;
+    intro.hidden = true;
+    tip.textContent = gameTip;
+    ensureEngine();
+    updateScore();
+  }
+
+  function victory() {
+    won = true;
+    playing = false;
+    for (const state of bikes) clearTimeout(state.timer);
+    tip.textContent = '🎉 Všechny motorky jsou pryč!';
+    updateEngine();
+    sound(520, .17); setTimeout(() => sound(660, .17), 140); setTimeout(() => sound(880, .35), 280);
+    setTimeout(() => { win.hidden = false; document.getElementById('againButton').focus(); }, 820);
+  }
+
+  document.getElementById('startButton').addEventListener('click', reset);
+  document.getElementById('againButton').addEventListener('click', reset);
+  document.addEventListener('visibilitychange', updateEngine);
+
+  // Fireworks on the birthday screen. The canvas is decorative and pauses during play.
+  const canvas = document.getElementById('fireworks');
+  const ctx = canvas.getContext('2d');
+  const particles = [];
+  let lastBurst = 0;
+  function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(rect.width * ratio);
+    canvas.height = Math.round(rect.height * ratio);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  }
+  function burst(x, y) {
+    const hue = Math.floor(Math.random() * 360);
+    for (let i = 0; i < 43; i++) {
+      const a = (i / 43) * Math.PI * 2;
+      const speed = 1.1 + Math.random() * 3.5;
+      particles.push({x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, life: 1, hue, r: 1.5 + Math.random() * 2});
+    }
+  }
+  function animate(t) {
+    requestAnimationFrame(animate);
+    if (intro.hidden && win.hidden) return;
+    const w = canvas.getBoundingClientRect().width;
+    const h = canvas.getBoundingClientRect().height;
+    if (!w || !h) return;
+    ctx.clearRect(0, 0, w, h);
+    if (t - lastBurst > 650) {
+      burst(w * (.1 + Math.random() * .8), h * (.08 + Math.random() * .6));
+      lastBurst = t;
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += .028; p.vx *= .992; p.life -= .013;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${p.hue}, 100%, 70%, ${p.life})`; ctx.fill();
+    }
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+  requestAnimationFrame(animate);
+  setTimeout(() => burst(canvas.clientWidth * .25, canvas.clientHeight * .28), 100);
+})();
+</script>
+</body>
+</html>
